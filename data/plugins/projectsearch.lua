@@ -48,17 +48,30 @@ function ResultsView:begin_search(text, fn)
   self.searching = true
   self.selected_idx = 0
 
+  -- Tag every search with a unique id. The previous search thread (if any) is
+  -- not cancelled by core.add_thread, so it can still be mid-scan when a newer
+  -- search starts. Binding the thread to this id, and to a *local* results
+  -- table, makes a superseded thread inert: it stops touching the view and can
+  -- never leak stale matches, progress or completion feedback into the new query.
+  self.search_id = (self.search_id or 0) + 1
+  local search_id = self.search_id
+  local results = self.results
+
   core.add_thread(function()
     for i, file in ipairs(core.project_files) do
+      if self.search_id ~= search_id then return end
       if file.type == "file" then
-        find_all_matches_in_file(self.results, file.filename, fn)
+        find_all_matches_in_file(results, file.filename, fn)
       end
+      if self.search_id ~= search_id then return end
       self.last_file_idx = i
     end
-    self.searching = false
-    self.brightness = 100
-    core.redraw = true
-  end, self.results)
+    if self.search_id == search_id then
+      self.searching = false
+      self.brightness = 100
+      core.redraw = true
+    end
+  end, results)
 
   self.scroll.to.y = 0
 end
