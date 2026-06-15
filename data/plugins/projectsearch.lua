@@ -13,6 +13,7 @@ function ResultsView:new(text, fn)
   ResultsView.super.new(self)
   self.scrollable = true
   self.brightness = 0
+  self.generation = 0
   self:begin_search(text, fn)
 end
 
@@ -22,11 +23,12 @@ function ResultsView:get_name()
 end
 
 
-local function find_all_matches_in_file(t, filename, fn)
+local function find_all_matches_in_file(t, filename, fn, view, generation)
   local fp = io.open(filename)
   if not fp then return t end
   local n = 1
   for line in fp:lines() do
+    if generation ~= view.generation then return t end
     local s = fn(line)
     if s then
       table.insert(t, { file = filename, text = line, line = n, col = s })
@@ -47,18 +49,26 @@ function ResultsView:begin_search(text, fn)
   self.query = text
   self.searching = true
   self.selected_idx = 0
+  self.generation = self.generation + 1
+  local generation = self.generation
+  local results = self.results
 
   core.add_thread(function()
     for i, file in ipairs(core.project_files) do
+      if generation ~= self.generation then return end
       if file.type == "file" then
-        find_all_matches_in_file(self.results, file.filename, fn)
+        find_all_matches_in_file(results, file.filename, fn, self, generation)
       end
-      self.last_file_idx = i
+      if generation == self.generation then
+        self.last_file_idx = i
+      end
     end
-    self.searching = false
-    self.brightness = 100
-    core.redraw = true
-  end, self.results)
+    if generation == self.generation then
+      self.searching = false
+      self.brightness = 100
+      core.redraw = true
+    end
+  end, results)
 
   self.scroll.to.y = 0
 end
@@ -90,6 +100,9 @@ end
 
 
 function ResultsView:open_selected_result()
+  if self.searching then
+    return
+  end
   local res = self.results[self.selected_idx]
   if not res then
     return
