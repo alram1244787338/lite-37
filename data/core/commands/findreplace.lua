@@ -12,7 +12,7 @@ local function doc()
 end
 
 
-local previous_finds
+local previous_finds = {}
 local last_doc
 local last_fn, last_text
 
@@ -20,6 +20,9 @@ local last_fn, last_text
 local function push_previous_find(doc, sel)
   if last_doc ~= doc then
     last_doc = doc
+    previous_finds = {}
+  end
+  if not previous_finds then
     previous_finds = {}
   end
   if #previous_finds >= max_previous_finds then
@@ -129,11 +132,15 @@ command.add("core.docview", {
   end,
 
   ["find-replace:previous-find"] = function()
-    local sel = table.remove(previous_finds)
-    if not sel or doc() ~= last_doc then
-      core.error("No previous finds")
+    if not previous_finds or #previous_finds == 0 then
+      core.error("No previous find results")
       return
     end
+    if doc() ~= last_doc then
+      core.error("No previous find results in this document")
+      return
+    end
+    local sel = table.remove(previous_finds)
     doc():set_selection(table.unpack(sel))
     core.active_view:scroll_to_line(sel[3], true)
   end,
